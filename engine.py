@@ -468,7 +468,7 @@ def calc_vapor_pressure_curve(thermo_id: str, T_min_C: float = 0.0,
             "T_valid_min_C": T_valid_min_C, "T_valid_max_C": T_valid_max_C}
 
 
-def _detect_three_phase(x1_list, T_b_list, y1_list, tol=0.2, min_points=5):
+def _detect_three_phase(x1_list, T_b_list, y1_list, tol=0.2, min_points=8):
     """泡点曲線のプラトー（三相域）を検出する。
 
     Returns: {"T3_C": float, "x_alpha": float, "x_beta": float, "y3": float}
@@ -502,7 +502,10 @@ def _detect_three_phase(x1_list, T_b_list, y1_list, tol=0.2, min_points=5):
     x_beta = best_group[-1][1]
 
     # 純成分沸点との誤検出防止
-    if x_alpha < 0.01 or x_beta > 0.99:
+    # x_alpha ≈ 0 または x_beta ≈ 1 は純成分端点の誤検出
+    # < 0.001 の閾値: グリッド点 x1=0 のみ除外し、1/120=0.0083 の点は通す
+    # （water+hexane 等 x_alpha が 0.005-0.01 の高非混和系を検出可能にする）
+    if x_alpha < 0.001 or x_beta > 0.999:
         return None
 
     T3_C = sum(pt[2] for pt in best_group) / len(best_group)
