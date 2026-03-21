@@ -114,3 +114,23 @@ def render_conc_tab(tab):
                 height=500, plot_bgcolor="white",
             )
             st.plotly_chart(fig_conc, use_container_width=True)
+
+            # 三相域注記: 沸点が一定な区間を検出してユーザーに説明
+            T_bp_vals = [T for T in conc_result["T_bp"] if T is not None]
+            if len(T_bp_vals) >= 3:
+                plateau_T = None
+                streak = 1
+                for _i in range(1, len(T_bp_vals)):
+                    if abs(T_bp_vals[_i] - T_bp_vals[_i - 1]) < 0.5:
+                        streak += 1
+                        if streak >= 3:
+                            plateau_T = T_bp_vals[_i]
+                            break
+                    else:
+                        streak = 1
+                if plateau_T is not None:
+                    st.info(
+                        f"沸点が **{plateau_T:.1f} °C** 付近で一定になっている区間があります。"
+                        "これは不均一共沸系の**三相共存域**（蒸気＋二液相）を通過しているためで、"
+                        "Gibbs の相律により温度・気相組成が一定に保たれる物理的に正常な挙動です。"
+                    )

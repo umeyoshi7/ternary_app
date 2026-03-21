@@ -83,6 +83,26 @@ def render_vle_tab(tab):
                         x=list(xs), y=list(Ts), name="露点",
                         line=dict(color="orange", width=2, dash="dash"),
                     ))
+                three_phase = vle_res.get("three_phase")
+                if three_phase is not None:
+                    T3 = three_phase["T3_C"]
+                    fig_txy.add_trace(go.Scatter(
+                        x=[0.0, 1.0], y=[T3, T3], mode="lines",
+                        name=f"三相温度 {T3:.1f}°C",
+                        line=dict(color="green", width=1.5, dash="dot"),
+                    ))
+                    fig_txy.add_trace(go.Scatter(
+                        x=[three_phase["x_alpha"], three_phase["x_beta"]],
+                        y=[T3, T3], mode="markers",
+                        name="α/β端点",
+                        marker=dict(color="green", size=8, symbol="circle"),
+                    ))
+                    if three_phase["y3"] is not None:
+                        fig_txy.add_trace(go.Scatter(
+                            x=[three_phase["y3"]], y=[T3], mode="markers",
+                            name=f"y₃={three_phase['y3']:.3f}（異質共沸）",
+                            marker=dict(color="red", size=10, symbol="diamond"),
+                        ))
                 fig_txy.update_layout(
                     title=f"T-xy線図 @ {Pd:.3f} kPa",
                     xaxis=dict(title=f"モル分率 ({s1d})", range=[0, 1]),

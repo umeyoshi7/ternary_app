@@ -35,14 +35,14 @@ def render_lle_tab(tab):
                                         format="%.3f", key=f"amt_{solvent2['thermo_id']}")
             calc_layers = st.button("層分離計算", type="secondary")
 
-        # 溶媒変更時にセッション状態をリセット
-        solvent_key = (solvent1["thermo_id"], solvent2["thermo_id"])
-        if st.session_state.get("solvent_key") != solvent_key:
+        # 溶媒または温度・格子点数が変わったらキャッシュをリセット → 自動再計算
+        calc_key = (solvent1["thermo_id"], solvent2["thermo_id"], T_C, n_grid)
+        if st.session_state.get("lle_calc_key") != calc_key:
             for k in ["tie_lines", "binodal_pts", "T_C", "layer_result"]:
                 st.session_state.pop(k, None)
-            st.session_state["solvent_key"] = solvent_key
+            st.session_state["lle_calc_key"] = calc_key
 
-        # LLE計算
+        # LLE計算（条件変更時は自動実行、ボタンでも強制実行）
         if run or "tie_lines" not in st.session_state:
             with st.spinner("LLE 計算中..."):
                 try:

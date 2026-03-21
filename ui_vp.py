@@ -14,10 +14,12 @@ def render_vp_tab(tab):
             vp_T_range = st.slider("温度範囲 (°C)", -50, 250, (0, 150), key="vp_T_range")
             vp_sol = get_solvent_by_name(vp_name, ALL_SOLVENTS)
             vp_tid = vp_sol.get("thermo_surrogate", vp_sol["thermo_id"])
+            vp_offset = vp_sol.get("vp_T_offset", 0.0)
 
         with st.spinner("計算中..."):
             try:
-                vp_data = calc_vapor_pressure_curve(vp_tid, vp_T_range[0], vp_T_range[1])
+                vp_data = calc_vapor_pressure_curve(vp_tid, vp_T_range[0], vp_T_range[1],
+                                                    T_offset_K=vp_offset)
             except Exception as e:
                 vp_data = None
                 with col_vp2:
@@ -25,6 +27,26 @@ def render_vp_tab(tab):
 
         if vp_data:
             with col_vp2:
+                # Antoine 有効範囲チェック
+                t_vmin = vp_data.get("T_valid_min_C")
+                t_vmax = vp_data.get("T_valid_max_C")
+                if t_vmin is not None or t_vmax is not None:
+                    out_of_range = []
+                    if t_vmin is not None and vp_T_range[0] < t_vmin:
+                        out_of_range.append(f"下限 {t_vmin:.0f} °C")
+                    if t_vmax is not None and vp_T_range[1] > t_vmax:
+                        out_of_range.append(f"上限 {t_vmax:.0f} °C")
+                    if out_of_range:
+                        valid_str = ""
+                        if t_vmin is not None:
+                            valid_str += f"{t_vmin:.0f}"
+                        valid_str += " 〜 "
+                        if t_vmax is not None:
+                            valid_str += f"{t_vmax:.0f}"
+                        st.warning(
+                            f"表示範囲が蒸気圧相関式の有効範囲外です（有効範囲: {valid_str} °C）。"
+                            "範囲外の値は外挿のため精度が低下します。"
+                        )
                 if vp_data["T_bp_C"] is not None:
                     st.info(f"沸点 = **{vp_data['T_bp_C']:.1f} °C** @ 101.325 kPa")
                 else:

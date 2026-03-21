@@ -26,7 +26,11 @@ MISCIBLE_SOLVENTS = [
     {"name": "Sulfolane",                      "thermo_id": "sulfolane",                      "mw": 120.170, "density_a": 1.2895, "density_b": -0.000940},
     {"name": "t-Butyl Alcohol",                "thermo_id": "tert-butanol",                   "mw":  74.122, "density_a": 0.7982, "density_b": -0.000880},
     {"name": "Ethylene Glycol Dimethyl Ether", "thermo_id": "1,2-dimethoxyethane",            "mw":  90.121, "density_a": 0.8848, "density_b": -0.001100},
-    {"name": "1,3-Dimethylimidazolidin-2-One", "thermo_id": "1,3-dimethyl-2-imidazolidinone", "mw": 114.145, "density_a": 1.0726, "density_b": -0.000750},
+    # DMI: UNIFAC Dortmund に環状ウレア型 C=O の専用グループが存在しないため NMP 型近似を使用。
+    # 構造近似: sg86(NMP)でC=O+N環部分を表現、sg34(CH3N)×1で第2のN-CH3、sg78×2で環内CH2。
+    # Tb=225°C(thermo), 誘電率≒DMF(37.6), 双極子≒NMP(4.09D) の物性は thermo DB から正確に取得。
+    {"name": "1,3-Dimethylimidazolidin-2-One", "thermo_id": "1,3-dimethyl-2-imidazolidinone", "mw": 114.145, "density_a": 1.0726, "density_b": -0.000750,
+     "unifac_groups": {34: 1, 78: 2, 86: 1}},   # NMP型近似: CH3N(34)+CY-CH2(78)×2+NMP(86)
 ]
 
 IMMISCIBLE_SOLVENTS = [
@@ -54,20 +58,23 @@ IMMISCIBLE_SOLVENTS = [
     {"name": "Methyl Butyl Ketone",              "thermo_id": "2-hexanone",                 "mw": 100.158, "density_a": 0.8293, "density_b": -0.000900},
     {"name": "Methylcyclohexane",                "thermo_id": "methylcyclohexane",          "mw":  98.186, "density_a": 0.7874, "density_b": -0.000899},
     {"name": "Methyl tert-Butyl Ether",          "thermo_id": "methyl tert-butyl ether",    "mw":  88.148, "density_a": 0.7605, "density_b": -0.001000},
-    {"name": "Nitromethane",                     "thermo_id": "nitromethane",               "mw":  61.040, "density_a": 1.1601, "density_b": -0.001150},
+    {"name": "Nitromethane",                     "thermo_id": "nitromethane",               "mw":  61.040, "density_a": 1.1601, "density_b": -0.001150,
+     "unifac_groups": {54: 1}},                  # thermo は自動割当不可 → CH3NO2(54) を手動指定
     {"name": "Pentane",                          "thermo_id": "pentane",                    "mw":  72.149, "density_a": 0.6475, "density_b": -0.001066},
     {"name": "1-Pentanol",                       "thermo_id": "1-pentanol",                 "mw":  88.148, "density_a": 0.8298, "density_b": -0.000770},
     {"name": "n-Propyl Acetate",                 "thermo_id": "propyl acetate",             "mw": 102.132, "density_a": 0.9078, "density_b": -0.001000},
     {"name": "Tetrahydronaphthalene",            "thermo_id": "tetrahydronaphthalene",      "mw": 132.202, "density_a": 0.9870, "density_b": -0.000840},
     {"name": "Trichloroethylene",                "thermo_id": "trichloroethylene",          "mw": 131.389, "density_a": 1.4982, "density_b": -0.001700},
-    {"name": "Triethylamine",                    "thermo_id": "triethylamine",              "mw": 101.190, "density_a": 0.7419, "density_b": -0.000820},
+    {"name": "Triethylamine",                    "thermo_id": "triethylamine",              "mw": 101.190, "density_a": 0.7419, "density_b": -0.000820,
+     "unifac_groups": {1: 3, 35: 3}},            # thermo は {1:3,2:2,35:1} と誤認識 → N隣接CH2を3個に修正
     {"name": "Xylene (o-)",                      "thermo_id": "o-xylene",                   "mw": 106.165, "density_a": 0.8982, "density_b": -0.000907},
     {"name": "Isoamyl Alcohol",                  "thermo_id": "3-methyl-1-butanol",         "mw":  88.148, "density_a": 0.8262, "density_b": -0.000790},
     {"name": "Isopropylbenzene (Cumene)",         "thermo_id": "cumene",                     "mw": 120.191, "density_a": 0.8795, "density_b": -0.000887},
     {"name": "2-Methyltetrahydrofuran",          "thermo_id": "2-methyltetrahydrofuran",    "mw":  86.132, "density_a": 0.8770, "density_b": -0.001090},
     {"name": "Cyclopentyl Methyl Ether",         "thermo_id": "cyclopentyl methyl ether",   "mw": 100.158, "density_a": 0.8787, "density_b": -0.000970},
     {"name": "4-Methyltetrahydropyran",          "thermo_id": "4-methyltetrahydropyran",    "mw": 100.158, "density_a": 0.8711, "density_b": -0.000900,
-     "thermo_surrogate": "tetrahydropyran", "unifac_groups": {1: 1, 27: 1, 78: 2, 79: 1}},
+     "thermo_surrogate": "tetrahydropyran", "unifac_groups": {1: 1, 27: 1, 78: 2, 79: 1},
+     "vp_T_offset": 16.7},                       # THP(88°C) → 実測沸点105°Cへ補正 (+16.7 K)
 ]
 
 

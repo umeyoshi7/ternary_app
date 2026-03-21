@@ -7,6 +7,32 @@ import concurrent.futures as _cf
 _vf0_executor = _cf.ThreadPoolExecutor(max_workers=4)
 
 
+class _VaporPressureShifted:
+    """サロゲート化合物の蒸気圧曲線を T_offset_K だけ高温側にシフトし、
+    実測沸点に合わせる。GibbsExcessLiquid の VaporPressures リストに差し替えて使用。
+
+    例: THP(Tb=88°C)サロゲートを 4-MeTHP(Tb=105°C)に補正する場合
+        → T_offset_K = 16.7
+        → P_4MeTHP(T) ≈ P_THP(T − 16.7 K)
+    """
+    def __init__(self, vp_base, T_offset_K: float):
+        self._vp = vp_base
+        self._dT = T_offset_K
+        if getattr(vp_base, 'Tmin', None) is not None:
+            self.Tmin = vp_base.Tmin + T_offset_K
+        if getattr(vp_base, 'Tmax', None) is not None:
+            self.Tmax = vp_base.Tmax + T_offset_K
+
+    def __call__(self, T):
+        return self._vp(T - self._dT)
+
+    def T_dependent_property(self, T):
+        return self._vp.T_dependent_property(T - self._dT)
+
+    def __getattr__(self, name):
+        return getattr(self._vp, name)
+
+
 def _flash_vf0_timeout(flasher, P: float, zs: list, timeout: float = 0.35):
     """VF=0 フラッシュをタイムアウト付きで実行する。
     均一系では VF=0 は ~50ms で完了するが、LL 系では ~4s かかって失敗する。
@@ -36,7 +62,8 @@ def density_solvent(solvent: dict, T_C: float) -> float:
 @st.cache_resource
 def build_flasher(T: float, thermo_id_1: str, thermo_id_2: str,
                   surrogate_1: str = None, surrogate_2: str = None,
-                  unifac_override_1: tuple = None, unifac_override_2: tuple = None):
+                  unifac_override_1: tuple = None, unifac_override_2: tuple = None,
+                  vp_offset_1: float = 0.0, vp_offset_2: float = 0.0):
     P = 101325
     ids = ['water',
            surrogate_1 if surrogate_1 else thermo_id_1,
@@ -56,8 +83,17 @@ def build_flasher(T: float, thermo_id_1: str, thermo_id_2: str,
         interaction_data=DOUFIP2016,
         subgroups=DOUFSG,
     )
+    vp_list = list(correlations.VaporPressures)
+    if vp_offset_1:
+        shifted1 = _VaporPressureShifted(vp_list[1], vp_offset_1)
+        vp_list[1] = shifted1
+        correlations.VaporPressures[1] = shifted1  # FlashVLN 内部の K値推算にも反映
+    if vp_offset_2:
+        shifted2 = _VaporPressureShifted(vp_list[2], vp_offset_2)
+        vp_list[2] = shifted2
+        correlations.VaporPressures[2] = shifted2  # FlashVLN 内部の K値推算にも反映
     liquid = GibbsExcessLiquid(
-        VaporPressures=correlations.VaporPressures,
+        VaporPressures=vp_list,
         VolumeLiquids=correlations.VolumeLiquids,
         HeatCapacityGases=correlations.HeatCapacityGases,
         GibbsExcessModel=GE,
@@ -87,6 +123,8 @@ def calc_lle_diagram(T_C, solvent1: dict, solvent2: dict, n_grid=25):
         surrogate_2=solvent2.get("thermo_surrogate"),
         unifac_override_1=tuple(sorted(solvent1["unifac_groups"].items())) if "unifac_groups" in solvent1 else None,
         unifac_override_2=tuple(sorted(solvent2["unifac_groups"].items())) if "unifac_groups" in solvent2 else None,
+        vp_offset_1=solvent1.get("vp_T_offset", 0.0),
+        vp_offset_2=solvent2.get("vp_T_offset", 0.0),
     )
 
     tie_lines = []
@@ -158,6 +196,8 @@ def calc_layer_composition(T_C, amounts, unit, solvent1: dict, solvent2: dict):
             surrogate_2=solvent2.get("thermo_surrogate"),
             unifac_override_1=tuple(sorted(solvent1["unifac_groups"].items())) if "unifac_groups" in solvent1 else None,
             unifac_override_2=tuple(sorted(solvent2["unifac_groups"].items())) if "unifac_groups" in solvent2 else None,
+            vp_offset_1=solvent1.get("vp_T_offset", 0.0),
+            vp_offset_2=solvent2.get("vp_T_offset", 0.0),
         )
         res = flasher.flash(T=T, P=P, zs=z)
     except Exception as e:
@@ -204,11 +244,13 @@ def calc_layer_composition(T_C, amounts, unit, solvent1: dict, solvent2: dict):
 # ── VLE 機能 ──────────────────────────────────────────────────────────────────
 
 @st.cache_resource
-def build_flasher_general(thermo_ids: tuple, unifac_overrides: tuple = ()):
+def build_flasher_general(thermo_ids: tuple, unifac_overrides: tuple = (),
+                          vp_offsets: tuple = ()):
     """可変成分数 (2〜4) の FlashVLN を構築・キャッシュする。
 
     thermo_ids: surrogateを適用済みの thermo ID タプル
     unifac_overrides: ((idx, items_tuple), ...) UNIFAC グループ上書き用
+    vp_offsets: ((idx, T_offset_K), ...) 蒸気圧曲線温度シフト用
     """
     n = len(thermo_ids)
     T0, P0 = 298.15, 101325
@@ -226,8 +268,13 @@ def build_flasher_general(thermo_ids: tuple, unifac_overrides: tuple = ()):
         interaction_data=DOUFIP2016,
         subgroups=DOUFSG,
     )
+    vp_list = list(correlations.VaporPressures)
+    for idx, dT in vp_offsets:
+        shifted = _VaporPressureShifted(vp_list[idx], dT)
+        vp_list[idx] = shifted
+        correlations.VaporPressures[idx] = shifted  # FlashVLN 内部の K値推算にも反映
     liquid = GibbsExcessLiquid(
-        VaporPressures=correlations.VaporPressures,
+        VaporPressures=vp_list,
         VolumeLiquids=correlations.VolumeLiquids,
         HeatCapacityGases=correlations.HeatCapacityGases,
         GibbsExcessModel=GE,
@@ -248,7 +295,12 @@ def _solvents_to_flasher_args(solvents: list):
         for i, s in enumerate(solvents)
         if "unifac_groups" in s
     )
-    return thermo_ids, unifac_overrides
+    vp_offsets = tuple(
+        (i, s["vp_T_offset"])
+        for i, s in enumerate(solvents)
+        if s.get("vp_T_offset", 0.0) != 0.0
+    )
+    return thermo_ids, unifac_overrides, vp_offsets
 
 
 def _bubble_point_flash(flasher, P: float, zs: list,
@@ -322,15 +374,73 @@ def _bubble_point_flash(flasher, P: float, zs: list,
     return res
 
 
+def _dew_point_flash(flasher, P: float, zs: list,
+                     T_bp_K: float = None, try_vf1: bool = True):
+    """露点フラッシュ。VF=1指定を試み、失敗時は T-P 二分探索にフォールバック。
+
+    T_bp_K: 泡点温度(K)。露点 >= 泡点 なので T_lo の下限として活用。
+
+    Returns
+    -------
+    flash result object (liquid 相が存在する)
+    """
+    # Fast path: VF=1 仕様（均一系や2成分系で動作）
+    if try_vf1:
+        try:
+            r = flasher.flash(P=P, VF=1, zs=zs)
+            if r is not None:
+                return r
+        except Exception:
+            pass
+
+    # Fallback: T-P 二分探索で vapor が完全になる T を探す
+    _T_lo = T_bp_K if T_bp_K else 250.0
+    _T_hi = _T_lo + 80.0
+
+    # T_hi で VF >= 1 を確認し、なければ上方拡張
+    _T_hi_ok = False
+    for _ in range(6):          # 最大 6 回 × 20K 拡張
+        try:
+            r = flasher.flash(T=_T_hi, P=P, zs=zs)
+            if r.VF >= 1.0 - 1e-6:
+                _T_hi_ok = True
+                break
+        except Exception:
+            pass
+        _T_hi = min(550.0, _T_hi + 20.0)
+
+    if not _T_hi_ok:
+        raise ValueError(
+            f"Dew point not found above T_lo={_T_lo - 273.15:.1f} °C"
+        )
+
+    # --- 二分探索 ---
+    for _ in range(10):
+        T_mid = (_T_lo + _T_hi) / 2.0
+        try:
+            r = flasher.flash(T=T_mid, P=P, zs=zs)
+            if r.VF >= 1.0 - 1e-6:
+                _T_hi = T_mid
+            else:
+                _T_lo = T_mid
+        except Exception:
+            _T_hi = T_mid  # 収束不安定な高温側を除外
+
+    return flasher.flash(T=_T_hi, P=P, zs=zs)
+
+
 def calc_vapor_pressure_curve(thermo_id: str, T_min_C: float = 0.0,
-                               T_max_C: float = 150.0, n: int = 200):
+                               T_max_C: float = 150.0, n: int = 200,
+                               T_offset_K: float = 0.0):
     """蒸気圧曲線を計算する。
 
-    Returns: {"T_C": list, "P_kPa": list, "T_bp_C": float or None}
-    T_bp_C: 101.325 kPa での沸点（温度範囲外なら None）
+    T_offset_K: サロゲートの沸点ずれを補正するための温度シフト量 (K)
+    Returns: {"T_C": list, "P_kPa": list, "T_bp_C": float or None,
+              "T_valid_min_C": float or None, "T_valid_max_C": float or None}
     """
     _, props = ChemicalConstantsPackage.from_IDs([thermo_id])
-    vp = props.VaporPressures[0]
+    vp_raw = props.VaporPressures[0]
+    vp = _VaporPressureShifted(vp_raw, T_offset_K) if T_offset_K else vp_raw
     temps = [T_min_C + (T_max_C - T_min_C) * i / (n - 1) for i in range(n)]
     pressures = [vp(t + 273.15) / 1000.0 for t in temps]  # Pa → kPa
 
@@ -351,7 +461,55 @@ def calc_vapor_pressure_curve(thermo_id: str, T_min_C: float = 0.0,
     except Exception:
         T_bp = None
 
-    return {"T_C": temps, "P_kPa": pressures, "T_bp_C": T_bp}
+    T_valid_min_C = (vp.Tmin - 273.15) if getattr(vp, "Tmin", None) is not None else None
+    T_valid_max_C = (vp.Tmax - 273.15) if getattr(vp, "Tmax", None) is not None else None
+
+    return {"T_C": temps, "P_kPa": pressures, "T_bp_C": T_bp,
+            "T_valid_min_C": T_valid_min_C, "T_valid_max_C": T_valid_max_C}
+
+
+def _detect_three_phase(x1_list, T_b_list, y1_list, tol=0.5, min_points=3):
+    """泡点曲線のプラトー（三相域）を検出する。
+
+    Returns: {"T3_C": float, "x_alpha": float, "x_beta": float, "y3": float}
+    または None（検出不可）
+    """
+    # 有効点のみ抽出（インデックス保持）
+    valid = [(i, x, T, y) for i, (x, T, y) in enumerate(zip(x1_list, T_b_list, y1_list))
+             if T is not None]
+    if len(valid) < min_points:
+        return None
+
+    # 連続する min_points 点以上が tol°C 以内の平坦域を探す
+    best_group = []
+    current_group = [valid[0]]
+
+    for j in range(1, len(valid)):
+        prev_T = current_group[0][2]  # グループ先頭の温度
+        if abs(valid[j][2] - prev_T) <= tol:
+            current_group.append(valid[j])
+        else:
+            if len(current_group) > len(best_group):
+                best_group = current_group
+            current_group = [valid[j]]
+    if len(current_group) > len(best_group):
+        best_group = current_group
+
+    if len(best_group) < min_points:
+        return None
+
+    x_alpha = best_group[0][1]
+    x_beta = best_group[-1][1]
+
+    # 純成分沸点との誤検出防止
+    if x_alpha < 0.01 or x_beta > 0.99:
+        return None
+
+    T3_C = sum(pt[2] for pt in best_group) / len(best_group)
+    y3_vals = [pt[3] for pt in best_group if pt[3] is not None]
+    y3 = sum(y3_vals) / len(y3_vals) if y3_vals else None
+
+    return {"T3_C": T3_C, "x_alpha": x_alpha, "x_beta": x_beta, "y3": y3}
 
 
 def calc_vle_xy(solvents: list, P_kPa: float, n: int = 80):
@@ -360,8 +518,8 @@ def calc_vle_xy(solvents: list, P_kPa: float, n: int = 80):
     solvents: 2成分の solvent dict リスト
     Returns: {"x1": list, "y1": list, "T_bubble_C": list, "T_dew_C": list}
     """
-    thermo_ids, unifac_overrides = _solvents_to_flasher_args(solvents)
-    flasher = build_flasher_general(thermo_ids, unifac_overrides)
+    thermo_ids, unifac_overrides, vp_offsets = _solvents_to_flasher_args(solvents)
+    flasher = build_flasher_general(thermo_ids, unifac_overrides, vp_offsets)
     P = P_kPa * 1000.0
 
     x1_list, y1_list, T_b_list, T_d_list = [], [], [], []
@@ -376,7 +534,8 @@ def calc_vle_xy(solvents: list, P_kPa: float, n: int = 80):
         except Exception:
             pass
         try:
-            res_d = flasher.flash(P=P, VF=1, zs=z)
+            T_bp_K_hint = (T_b + 273.15) if T_b is not None else None
+            res_d = _dew_point_flash(flasher, P, z, T_bp_K=T_bp_K_hint)
             T_d = res_d.T - 273.15
         except Exception:
             pass
@@ -385,8 +544,41 @@ def calc_vle_xy(solvents: list, P_kPa: float, n: int = 80):
         T_b_list.append(T_b)
         T_d_list.append(T_d)
 
+    three_phase = _detect_three_phase(x1_list, T_b_list, y1_list)
+    if three_phase is not None:
+        T3_C = three_phase["T3_C"]
+
+        # T3 でのフラッシュで三相域を正確に特定し、泡点を T3 に補完する
+        # VF > 0 at T3 → 気化開始温度が T3 以下 → 正しい T_b = T3
+        # （VF=0 fast path の準安定解や二分探索の偽VL収束を両方修正できる）
+        T3_K = T3_C + 273.15
+        for idx, x1 in enumerate(x1_list):
+            if not (0.01 < x1 < 0.99):
+                continue
+            T_b = T_b_list[idx]
+            if T_b is not None and abs(T_b - T3_C) <= 2.0:
+                continue  # 既に T3 近傍なら検証不要
+            try:
+                r_t3 = flasher.flash(T=T3_K, P=P, zs=[x1, 1.0 - x1])
+                if r_t3.gas is not None and r_t3.VF > 1e-6:
+                    T_b_list[idx] = T3_C  # 三相域: T_b = T3 が正しい
+            except Exception:
+                pass
+
+        # 補完後に x_alpha, x_beta を更新（三相域の両端を再確定）
+        plateau_xs = [x for x, T_b in zip(x1_list, T_b_list)
+                      if T_b is not None and abs(T_b - T3_C) <= 1.0
+                      and 0.01 < x < 0.99]
+        if plateau_xs:
+            three_phase["x_alpha"] = min(plateau_xs)
+            three_phase["x_beta"] = max(plateau_xs)
+
+        # T_dew は _dew_point_flash が計算した値を使う（V字形の露点曲線になる）
+        # T_dew = T3 が正しいのは z1 ≈ y3 の組成のみ（物理的に正確）
+
     return {"x1": x1_list, "y1": y1_list,
-            "T_bubble_C": T_b_list, "T_dew_C": T_d_list}
+            "T_bubble_C": T_b_list, "T_dew_C": T_d_list,
+            "three_phase": three_phase}
 
 
 def calc_rayleigh_distillation(solvents: list, initial_moles: list,
@@ -398,8 +590,8 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
     Returns: {"evap_fraction": list, "amounts": {name: list[mol]},
               "total": list[mol], "T_bp": list[°C or None]}
     """
-    thermo_ids, unifac_overrides = _solvents_to_flasher_args(solvents)
-    flasher = build_flasher_general(thermo_ids, unifac_overrides)
+    thermo_ids, unifac_overrides, vp_offsets = _solvents_to_flasher_args(solvents)
+    flasher = build_flasher_general(thermo_ids, unifac_overrides, vp_offsets)
     P = P_kPa * 1000.0
 
     L = [float(m) for m in initial_moles]
