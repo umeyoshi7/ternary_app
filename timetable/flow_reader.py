@@ -90,7 +90,17 @@ def read_flow_excel(file_obj: io.BytesIO | str) -> ManufacturingFlow:
     xl = pd.ExcelFile(file_obj, engine="openpyxl")
 
     # ── フローシート読み込み ──────────────────────────────────────────────
-    df_flow = xl.parse("フロー", dtype=str).fillna("")
+    # テンプレートはタイトル行・説明行の後にヘッダーがあるため、
+    # 「工程番号」を含む行を自動検出してヘッダー行として使用する
+    def _find_header_row(sheet_name: str, key_col: str) -> int:
+        raw = xl.parse(sheet_name, header=None, dtype=str).fillna("")
+        for i, row in raw.iterrows():
+            if key_col in row.values:
+                return i
+        return 0
+
+    flow_header_row = _find_header_row("フロー", "工程番号")
+    df_flow = xl.parse("フロー", header=flow_header_row, dtype=str).fillna("")
 
     # 必須列チェック
     required_cols = ["工程番号", "工程名", "操作タイプ", "前工程番号", "時間決定", "手動時間(分)"]
@@ -101,7 +111,8 @@ def read_flow_excel(file_obj: io.BytesIO | str) -> ManufacturingFlow:
     # ── パラメータシート読み込み ─────────────────────────────────────────
     params_by_step: dict[int, dict[str, Any]] = {}
     if "パラメータ" in xl.sheet_names:
-        df_param = xl.parse("パラメータ", dtype=str).fillna("")
+        param_header_row = _find_header_row("パラメータ", "工程番号")
+        df_param = xl.parse("パラメータ", header=param_header_row, dtype=str).fillna("")
         req_p = ["工程番号", "パラメータ名", "値"]
         missing_p = [c for c in req_p if c not in df_param.columns]
         if missing_p:

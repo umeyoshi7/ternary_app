@@ -1,3 +1,4 @@
+import contextlib
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -5,8 +6,8 @@ from engine import calc_vapor_pressure_curve
 from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 
-def render_vp_tab(tab):
-    with tab:
+def render_vp_tab(tab=None):
+    with (tab if tab is not None else contextlib.nullcontext()):
         st.header("蒸気圧曲線")
         col_vp1, col_vp2 = st.columns([1, 3])
         with col_vp1:

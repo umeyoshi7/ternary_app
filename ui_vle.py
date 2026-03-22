@@ -1,3 +1,4 @@
+import contextlib
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -5,8 +6,8 @@ from engine import calc_vle_xy
 from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 
-def render_vle_tab(tab):
-    with tab:
+def render_vle_tab(tab=None):
+    with (tab if tab is not None else contextlib.nullcontext()):
         st.header("VLE線図（2成分系）")
         col_v1, col_v2, col_v3 = st.columns(3)
         with col_v1:

@@ -90,7 +90,9 @@ def _calc_reaction_duration(params: dict) -> float | None:
     try:
         import sys
         import os
-        sys.path.insert(0, "/home/umeyoshi7/react_analysis")
+        react_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "react_analysis")
+        if react_dir not in sys.path:
+            sys.path.insert(0, react_dir)
         import react_analysis  # noqa: F401
         return react_analysis.calc_duration_min(params)
     except (ImportError, Exception):
@@ -264,7 +266,15 @@ def _render_preview(flow: ManufacturingFlow, schedule: dict, start_hour: float):
 # メイン描画
 # ---------------------------------------------------------------------------
 
-def render():
+def render(tab=None):
+    if tab is not None:
+        with tab:
+            _render_inner()
+    else:
+        _render_inner()
+
+
+def _render_inner():
     st.header("タイムテーブル自動作成")
 
     # ─ ステップ説明 ─

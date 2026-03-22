@@ -1,3 +1,4 @@
+import contextlib
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -6,8 +7,8 @@ from engine import calc_rayleigh_distillation, density_water, density_solvent
 from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 
-def render_conc_tab(tab):
-    with tab:
+def render_conc_tab(tab=None):
+    with (tab if tab is not None else contextlib.nullcontext()):
         st.header("濃縮シミュレーション（レイリー蒸留）")
         conc_n = st.radio("成分数", [2, 3, 4], horizontal=True, key="conc_n")
         conc_unit = st.radio("単位", ["mol", "g", "mL"], horizontal=True, key="conc_unit")

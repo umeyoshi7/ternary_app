@@ -1,8 +1,9 @@
+import contextlib
 import streamlit as st
 
 
-def render_logic_tab(tab):
-    with tab:
+def render_logic_tab(tab=None):
+    with (tab if tab is not None else contextlib.nullcontext()):
         st.header("計算ロジック・数式説明")
 
         with st.expander("1. UNIFAC Dortmund モデル（活量係数）", expanded=True):

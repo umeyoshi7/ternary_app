@@ -1,3 +1,4 @@
+import contextlib
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -6,8 +7,8 @@ from engine import calc_lle_diagram, calc_layer_composition
 from solvents import MISCIBLE_SOLVENTS, IMMISCIBLE_SOLVENTS, get_solvent_by_name
 
 
-def render_lle_tab(tab):
-    with tab:
+def render_lle_tab(tab=None):
+    with (tab if tab is not None else contextlib.nullcontext()):
         col_ctrl, col_plot = st.columns([1, 2])
 
         with col_ctrl:

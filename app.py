@@ -5,18 +5,44 @@ from ui_vp import render_vp_tab
 from ui_vle import render_vle_tab
 from ui_conc import render_conc_tab
 from ui_logic import render_logic_tab
-from ui_timetable import render as render_timetable_tab
+from ui_timetable import render as render_timetable
+from ui_reaction import render as render_reaction
 
 st.set_page_config(page_title="バッチ製造支援ツール", layout="wide")
-st.title("バッチ製造支援ツール")
 
-tab_timetable, tab_vp, tab_lle, tab_vle, tab_conc, tab_logic = st.tabs([
-    "タイムテーブル作成", "蒸気圧曲線", "LLE線図", "VLE線図", "濃縮シミュレーション", "ロジック"
-])
 
-render_timetable_tab(tab_timetable)
-render_vp_tab(tab_vp)
-render_lle_tab(tab_lle)
-render_vle_tab(tab_vle)
-render_conc_tab(tab_conc)
-render_logic_tab(tab_logic)
+def _coming_soon(name: str):
+    st.title(name)
+    st.info("このページは現在準備中です。")
+
+
+def _page_timetable():    render_timetable()
+def _page_lle():          render_lle_tab()
+def _page_vle():          render_vle_tab()
+def _page_vp():           render_vp_tab()
+def _page_conc():         render_conc_tab()
+def _page_reaction():     render_reaction()
+def _page_conc_time():    _coming_soon("濃縮時間推算")
+def _page_heat():         _coming_soon("伝熱計算")
+def _page_filter():       _coming_soon("ろ過時間推算")
+def _page_logic():        render_logic_tab()
+
+pg = st.navigation({
+    "生産管理": [
+        st.Page(_page_timetable, title="タイムテーブル作成"),
+    ],
+    "化学工学計算": [
+        st.Page(_page_lle,       title="LLE線図"),
+        st.Page(_page_vle,       title="VLE線図"),
+        st.Page(_page_vp,        title="蒸気圧曲線"),
+        st.Page(_page_conc,      title="濃縮シミュレーション"),
+        st.Page(_page_reaction,  title="反応速度解析"),
+        st.Page(_page_conc_time, title="[濃縮時間推算]"),
+        st.Page(_page_heat,      title="[伝熱計算]"),
+        st.Page(_page_filter,    title="[ろ過時間推算]"),
+    ],
+    "ロジック説明": [
+        st.Page(_page_logic,     title="ロジック説明"),
+    ],
+})
+pg.run()
