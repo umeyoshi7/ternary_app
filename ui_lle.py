@@ -100,6 +100,18 @@ def render_lle_tab(tab=None):
                     bw = layer_result["beta_water"]
                     bo = layer_result["beta_organic"]
                     st.caption(f"水層 β={bw:.4f} | 有機層 β={bo:.4f}")
+                    abs_rows = []
+                    for phase_name, key in [("水層", "water_layer"), ("有機層", "organic_layer")]:
+                        d = layer_result[key]
+                        for i, comp in enumerate(labels):
+                            abs_rows.append({
+                                "相": phase_name, "成分": comp,
+                                "mol": f"{d['moles'][i]:.4f}",
+                                "g":   f"{d['grams'][i]:.4f}",
+                                "mL":  f"{d['volumes_mL'][i]:.4f}",
+                            })
+                    st.caption("絶対量")
+                    st.dataframe(pd.DataFrame(abs_rows), use_container_width=True, hide_index=True)
                 else:
                     st.info("2相分離なし（均一相）")
 

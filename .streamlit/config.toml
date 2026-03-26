@@ -1,0 +1,4 @@
+[server]
+# Windows で Ctrl+C が効かない問題の回避
+# watchdog (inotify) の代わりに polling を使用することでスレッドが残留しにくくなる
+fileWatcherType = "poll"

@@ -2,9 +2,11 @@ from thermo import ChemicalConstantsPackage, GibbsExcessLiquid, FlashVLN, CEOSGa
 from thermo.unifac import UNIFAC, DOUFSG, DOUFIP2016
 import streamlit as st
 import concurrent.futures as _cf
+import atexit
 
 # VF=0 タイムアウト用スレッドプール（LL系で VF=0 が 4s かかる問題を回避）
 _vf0_executor = _cf.ThreadPoolExecutor(max_workers=4)
+atexit.register(_vf0_executor.shutdown, wait=False)
 
 
 class _VaporPressureShifted:
@@ -228,6 +230,9 @@ def calc_layer_composition(T_C, amounts, unit, solvent1: dict, solvent2: dict):
             'ww_pct': [g / total_pg * 100 for g in phase_grams_i],
             'vv_pct': [v / total_pv * 100 for v in phase_vol_i],
             'beta': beta,
+            'moles':      phase_moles_i,
+            'grams':      phase_grams_i,
+            'volumes_mL': phase_vol_i,
         }
 
     return {

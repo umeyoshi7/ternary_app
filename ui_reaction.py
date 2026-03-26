@@ -89,14 +89,23 @@ def render(tab=None):
     _init_state()
 
     # ---------------------------------------------------------------------------
-    # Sidebar
+    # Main area
     # ---------------------------------------------------------------------------
-    with st.sidebar:
-        st.title("反応速度解析")
-        st.markdown("---")
+    st.title("反応速度定数・反応次数推算")
 
-        # Template download
-        st.subheader("1. テンプレートDL")
+    # result_container の位置はここ（ページ上部）に固定され、
+    # 後から with result_container: で中身を流し込む
+    result_container = st.container()
+
+    # ---------------------------------------------------------------------------
+    # Setup tabs (コード上はここ＝ページ最下段に表示)
+    # ---------------------------------------------------------------------------
+    st.divider()
+    setup_tab1, setup_tab2, setup_tab3 = st.tabs(
+        ["1. テンプレートDL", "2. データアップロード", "3. 解析設定"]
+    )
+
+    with setup_tab1:
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
             if TEMPLATE_PATH.exists():
@@ -126,10 +135,7 @@ def render(tab=None):
                 use_container_width=True,
             )
 
-        st.markdown("---")
-
-        # File upload
-        st.subheader("2. データアップロード")
+    with setup_tab2:
         uploaded_file = st.file_uploader(
             "実験データ (.xlsx / .csv)",
             type=["xlsx", "csv"],
@@ -186,10 +192,7 @@ def render(tab=None):
                         st.error(f"{e}")
                         st.session_state["uploaded_df"] = None
 
-        st.markdown("---")
-
-        # Analysis settings
-        st.subheader("3. 解析設定")
+    with setup_tab3:
         st.caption("解析手法: RK4+最小二乗法（数値積分法）")
 
         df_loaded: pd.DataFrame | None = st.session_state["uploaded_df"]
@@ -226,32 +229,32 @@ def render(tab=None):
             use_container_width=True,
         )
 
-    # ---------------------------------------------------------------------------
-    # Run analysis
-    # ---------------------------------------------------------------------------
-    if run_btn and st.session_state["uploaded_df"] is not None:
-        with st.spinner("解析中…"):
-            try:
-                tg = st.session_state.get("temp_groups", {})
-                result = run_analysis(
-                    st.session_state["uploaded_df"],
-                    reaction_type=reaction_type,
-                    temp_groups=tg if len(tg) >= 2 else None,
-                )
-                st.session_state["analysis_results"]  = result
-                st.session_state["analysis_complete"] = True
-                st.session_state["sim_results"]       = None
-                st.session_state["sim_conditions"]    = []
-            except Exception as e:
-                st.error(f"解析エラー: {e}")
+        if run_btn and st.session_state["uploaded_df"] is not None:
+            with st.spinner("解析中…"):
+                try:
+                    tg = st.session_state.get("temp_groups", {})
+                    result = run_analysis(
+                        st.session_state["uploaded_df"],
+                        reaction_type=reaction_type,
+                        temp_groups=tg if len(tg) >= 2 else None,
+                    )
+                    st.session_state["analysis_results"]  = result
+                    st.session_state["analysis_complete"] = True
+                    st.session_state["sim_results"]       = None
+                    st.session_state["sim_conditions"]    = []
+                except Exception as e:
+                    st.error(f"解析エラー: {e}")
+            st.rerun()
 
-    # ---------------------------------------------------------------------------
-    # Main area
-    # ---------------------------------------------------------------------------
-    st.title("反応速度定数・反応次数推算")
+    # result_container を上部位置で埋める
+    with result_container:
+        _render_results()
 
+
+def _render_results() -> None:
+    """結果エリア（タイトル直下）のレンダリング。render() から result_container 経由で呼ばれる。"""
     if st.session_state["uploaded_df"] is None:
-        st.info("サイドバーからファイルをアップロードして解析を開始してください。")
+        st.info("「データアップロード」タブからファイルをアップロードして解析を開始してください。")
         st.markdown(
             """
             **対応する解析タイプ:**
@@ -338,7 +341,7 @@ def render(tab=None):
     # ===========================================================================
     with tab2:
         if not st.session_state["analysis_complete"]:
-            st.info("サイドバーの「解析実行」ボタンを押してください。")
+            st.info("「解析設定」タブの「解析実行」ボタンを押してください。")
         else:
             result: AnalysisResult = st.session_state["analysis_results"]
             fit = result.fit
@@ -416,7 +419,7 @@ def render(tab=None):
                 "**設定方法:** データファイルの `temperature` 列に各行の測定温度 (°C) を記入してください。"
             )
         elif not st.session_state["analysis_complete"]:
-            st.info("サイドバーの「解析実行」ボタンを押してください。")
+            st.info("「解析設定」タブの「解析実行」ボタンを押してください。")
         else:
             result: AnalysisResult = st.session_state["analysis_results"]
             arr    = result.arrhenius
@@ -563,7 +566,7 @@ def render(tab=None):
     # ===========================================================================
     with tab5:
         if not st.session_state["analysis_complete"]:
-            st.info("先にサイドバーの「解析実行」ボタンを押してください。解析結果が自動的にシミュレーション条件に反映されます。")
+            st.info("先に「解析設定」タブの「解析実行」ボタンを押してください。解析結果が自動的にシミュレーション条件に反映されます。")
         else:
             result_sim: AnalysisResult = st.session_state["analysis_results"]
             fit_sim = result_sim.fit
