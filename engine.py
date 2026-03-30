@@ -62,6 +62,46 @@ def density_solvent(solvent: dict, T_C: float) -> float:
 
 
 @st.cache_resource
+def _get_hvap_correlations(thermo_ids: tuple):
+    """各成分の蒸発熱相関式リスト（EnthalpyVaporization callables）を返す。
+
+    thermo_ids は _solvents_to_flasher_args が返すサロゲート済み ID タプル。
+    @st.cache_resource でキャッシュされるため、初回のみ ChemicalConstantsPackage
+    が呼ばれる。
+    """
+    _, props = ChemicalConstantsPackage.from_IDs(list(thermo_ids))
+    return props.EnthalpyVaporizations
+
+
+def calc_hvap_mix_J_mol(thermo_ids: tuple, y: list, T_K: float) -> float:
+    """蒸気相モル分率 y[i] で重み付けした混合蒸発熱 [J/mol_vapor] を返す。
+
+    Parameters
+    ----------
+    thermo_ids : tuple of str
+        _solvents_to_flasher_args が返すサロゲート済み thermo ID タプル
+    y : list[float]
+        各成分の気相モル分率 (sum ≈ 1)
+    T_K : float
+        温度 [K]
+
+    Returns
+    -------
+    float  J/mol  (> 0)。相関式が失敗した場合はフォールバック 40000 J/mol。
+    """
+    hvap_funcs = _get_hvap_correlations(thermo_ids)
+    total = 0.0
+    for yi, hv in zip(y, hvap_funcs):
+        try:
+            h = hv(T_K)
+            if h is not None and h > 0:
+                total += yi * h
+        except Exception:
+            pass
+    return total if total > 0 else 40000.0
+
+
+@st.cache_resource
 def build_flasher(T: float, thermo_id_1: str, thermo_id_2: str,
                   surrogate_1: str = None, surrogate_2: str = None,
                   unifac_override_1: tuple = None, unifac_override_2: tuple = None,
@@ -717,10 +757,11 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
     if total_initial <= 0:
         return {"evap_fraction": [],
                 "amounts": {s["name"]: [] for s in solvents},
-                "total": [], "T_bp": []}
+                "total": [], "T_bp": [], "vapor_fracs": []}
 
     dV = total_initial / n_steps
     evap_fractions, total_history, T_bp_history = [], [], []
+    vapor_history = []
     amounts_history = [[] for _ in range(len(solvents))]
     _T_bp_prev_K = None   # ウォームスタート用: 前ステップの泡点 (K)
     _vf0_known_fail = False  # True になると VF=0 をスキップして二分探索へ直行
@@ -779,6 +820,7 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
             if not _depleting:
                 # 三相域のまま → キャッシュ使用
                 T_bp_history.append(_T_three_phase_K - 273.15)
+                vapor_history.append(_y_cached[:])
                 if step < n_steps:
                     for i in range(len(solvents)):
                         L[i] = max(0.0, L[i] - dV * _y_cached[i])
@@ -838,6 +880,7 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
                                           try_vf0=False)
             except Exception:
                 T_bp_history.append(None)
+                vapor_history.append(None)
                 break
 
         y = list(res.gas.zs)
@@ -867,6 +910,7 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
                 _three_phase_streak = 0
 
         T_bp_history.append(T_bp)
+        vapor_history.append(y[:])
 
         if step < n_steps:
             for i in range(len(solvents)):
@@ -874,6 +918,8 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
 
     while len(T_bp_history) < len(evap_fractions):
         T_bp_history.append(None)
+    while len(vapor_history) < len(evap_fractions):
+        vapor_history.append(None)
 
     return {
         "evap_fraction": evap_fractions,
@@ -881,4 +927,5 @@ def calc_rayleigh_distillation(solvents: list, initial_moles: list,
                     for i in range(len(solvents))},
         "total": total_history,
         "T_bp": T_bp_history,
+        "vapor_fracs": vapor_history,
     }
