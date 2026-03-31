@@ -92,27 +92,38 @@ def _calc_heat_duration(params: dict) -> float | None:
         比熱容量       : cp [J/(g·K)]    デフォルト 2.0
         ΔT_offset      : ジャケット温度オフセット [K]  デフォルト ±20
     """
-    def _v(key, default):
+    def _get_str(key: str, default: str = "") -> str:
+        """文字列パラメータを取得する。"""
         p = params.get(key, default)
         if isinstance(p, dict):
-            return float(p.get("value", default))
+            return str(p.get("value", default)).strip()
+        return str(p).strip() if p else default
+
+    def _get_float(key: str, default: float) -> float:
+        """数値パラメータを取得する。"""
+        p = params.get(key, default)
+        if isinstance(p, dict):
+            try:
+                return float(p.get("value", default))
+            except (TypeError, ValueError):
+                return default
         try:
             return float(p)
         except (TypeError, ValueError):
-            return float(default)
+            return default
 
     try:
-        tag_no   = _v("tag_no", "")
+        tag_no   = _get_str("tag_no")
         if not tag_no:
             return None
 
-        T0       = _v("初期温度",   20.0)
-        T_target = _v("目標温度",   60.0)
-        V_liq_L  = _v("仕込み液量", 100.0)
-        density  = _v("液密度",     1.0)
-        cp       = _v("比熱容量",   2.0)
+        T0       = _get_float("初期温度",   20.0)
+        T_target = _get_float("目標温度",   60.0)
+        V_liq_L  = _get_float("仕込み液量", 100.0)
+        density  = _get_float("液密度",     1.0)
+        cp       = _get_float("比熱容量",   2.0)
         dT_sign  = 1.0 if T_target >= T0 else -1.0
-        dT_offset= _v("ΔT_offset",  20.0 * dT_sign)
+        dT_offset= _get_float("ΔT_offset",  20.0 * dT_sign)
 
         _HT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "heat_transfer")
         if _HT_DIR not in sys.path:
@@ -152,7 +163,10 @@ def _calc_filtration_duration(params: dict) -> float | None:
     def _v(key, default):
         p = params.get(key, default)
         if isinstance(p, dict):
-            return float(p.get("value", default))
+            try:
+                return float(p.get("value", default))
+            except (TypeError, ValueError):
+                return float(default)
         try:
             return float(p)
         except (TypeError, ValueError):
