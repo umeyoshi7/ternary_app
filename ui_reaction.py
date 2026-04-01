@@ -20,6 +20,12 @@ _REACT_DIR = os.path.join(os.path.dirname(__file__), "react_analysis")
 if _REACT_DIR not in sys.path:
     sys.path.insert(0, _REACT_DIR)
 
+# 他モジュール（heat_transfer/src, filtration/src）がキャッシュしている
+# sys.modules['src'] を一旦クリアして react_analysis/src を優先させる
+for _key in list(sys.modules.keys()):
+    if _key == "src" or _key.startswith("src."):
+        del sys.modules[_key]
+
 from src.analysis import run_analysis
 from src.data_loader import (
     auto_detect_reaction_type,
