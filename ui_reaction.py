@@ -17,8 +17,10 @@ import streamlit as st
 # react_analysis/src/* は "from src.X import Y" 形式の絶対インポートを使用しているため、
 # react_analysis/ をパスに追加してからインポートする
 _REACT_DIR = os.path.join(os.path.dirname(__file__), "react_analysis")
-if _REACT_DIR not in sys.path:
-    sys.path.insert(0, _REACT_DIR)
+# remove → insert(0) で確実に先頭に置く（他モジュールが先にパスを追加済みの場合も対応）
+if _REACT_DIR in sys.path:
+    sys.path.remove(_REACT_DIR)
+sys.path.insert(0, _REACT_DIR)
 
 # 他モジュール（heat_transfer/src, filtration/src）がキャッシュしている
 # sys.modules['src'] を一旦クリアして react_analysis/src を優先させる

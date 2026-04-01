@@ -6,10 +6,11 @@ import streamlit as st
 
 # ── サブモジュールをパスに追加 ────────────────────────────────────────────────
 _HT_DIR = os.path.join(os.path.dirname(__file__), "heat_transfer")
-if _HT_DIR not in sys.path:
-    sys.path.insert(0, _HT_DIR)
+# remove → insert(0) で確実に先頭に置く（他モジュールが先にパスを追加済みの場合も対応）
+if _HT_DIR in sys.path:
+    sys.path.remove(_HT_DIR)
+sys.path.insert(0, _HT_DIR)
 
-# react_analysis/src が先にキャッシュされている場合はクリアして heat_transfer/src を優先
 for _key in list(sys.modules.keys()):
     if _key == "src" or _key.startswith("src."):
         del sys.modules[_key]
