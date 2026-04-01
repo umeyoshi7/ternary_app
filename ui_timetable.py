@@ -15,7 +15,6 @@ from __future__ import annotations
 import io
 import os
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -23,13 +22,40 @@ import streamlit as st
 
 from timetable.flow_reader import (
     ManufacturingFlow,
-    OPERATION_TYPES,
-    TIME_METHOD_CALC,
     TIME_METHOD_MANUAL,
     read_flow_excel,
     resolve_schedule,
 )
 from timetable.timetable_writer import OP_COLORS, write_timetable_excel
+
+# ── Capture calculation functions at import time (avoid repeated sys.modules churn) ──
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+_HT_DIR = os.path.join(_APP_DIR, "heat_transfer")
+if _HT_DIR not in sys.path:
+    sys.path.insert(0, _HT_DIR)
+for _key in list(sys.modules.keys()):
+    if _key == "src" or _key.startswith("src."):
+        del sys.modules[_key]
+try:
+    from src.reactor_db import get_reactor_spec as _ht_get_reactor_spec  # type: ignore[import]
+    from src.geometry import calc_geometry as _ht_calc_geometry            # type: ignore[import]
+    from src.heat_calc import simulate_inner_control as _ht_simulate       # type: ignore[import]
+    _HT_AVAILABLE = True
+except Exception:
+    _HT_AVAILABLE = False
+
+_FI_DIR = os.path.join(_APP_DIR, "filtration")
+if _FI_DIR not in sys.path:
+    sys.path.insert(0, _FI_DIR)
+for _key in list(sys.modules.keys()):
+    if _key == "src" or _key.startswith("src."):
+        del sys.modules[_key]
+try:
+    from src.calc import calc_filtration_time_pressure as _fi_calc  # type: ignore[import]
+    _FI_AVAILABLE = True
+except Exception:
+    _FI_AVAILABLE = False
 
 TEMPLATE_PATH = Path(__file__).parent / "timetable" / "templates" / "flow_template.xlsx"
 
@@ -113,6 +139,8 @@ def _calc_heat_duration(params: dict) -> float | None:
             return default
 
     try:
+        if not _HT_AVAILABLE:
+            return None
         tag_no   = _get_str("tag_no")
         if not tag_no:
             return None
@@ -125,22 +153,10 @@ def _calc_heat_duration(params: dict) -> float | None:
         dT_sign  = 1.0 if T_target >= T0 else -1.0
         dT_offset= _get_float("ΔT_offset",  20.0 * dT_sign)
 
-        _HT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "heat_transfer")
-        if _HT_DIR not in sys.path:
-            sys.path.insert(0, _HT_DIR)
-        # src モジュールのキャッシュをクリア（heat_transfer/src を優先）
-        for _key in list(sys.modules.keys()):
-            if _key == "src" or _key.startswith("src."):
-                del sys.modules[_key]
-
-        from src.reactor_db import get_reactor_spec  # type: ignore[import]
-        from src.geometry import calc_geometry        # type: ignore[import]
-        from src.heat_calc import simulate_inner_control  # type: ignore[import]
-
-        spec   = get_reactor_spec(tag_no)
-        geo    = calc_geometry(spec, V_liq_L)
+        spec   = _ht_get_reactor_spec(tag_no)
+        geo    = _ht_calc_geometry(spec, V_liq_L)
         mass_g = V_liq_L * density * 1000.0
-        result = simulate_inner_control(spec, geo, T0, T_target, dT_offset, mass_g, cp)
+        result = _ht_simulate(spec, geo, T0, T_target, dT_offset, mass_g, cp)
         if result.t_target_s is not None:
             return result.t_target_s / 60.0
     except Exception:
@@ -173,6 +189,8 @@ def _calc_filtration_duration(params: dict) -> float | None:
             return float(default)
 
     try:
+        if not _FI_AVAILABLE:
+            return None
         dP_MPa   = _v("差圧ΔP",        0.2)
         mu       = _v("ろ液粘度μ",      1.0)
         alpha    = _v("ケーク比抵抗α",  5e11)
@@ -181,16 +199,7 @@ def _calc_filtration_duration(params: dict) -> float | None:
         m_cake_g = _v("乾燥ケーキ質量", 1000.0)
         V_total  = _v("総ろ液量",        100.0)
 
-        _FI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "filtration")
-        if _FI_DIR not in sys.path:
-            sys.path.insert(0, _FI_DIR)
-        for _key in list(sys.modules.keys()):
-            if _key == "src" or _key.startswith("src."):
-                del sys.modules[_key]
-
-        from src.calc import calc_filtration_time_pressure  # type: ignore[import]
-
-        result = calc_filtration_time_pressure(
+        result = _fi_calc(
             delta_P_MPaG=dP_MPa,
             mu_mPas=mu,
             alpha_m_per_kg=alpha,
@@ -445,12 +454,8 @@ def _render_preview(flow: ManufacturingFlow, schedule: dict, start_hour: float):
 # メイン描画
 # ---------------------------------------------------------------------------
 
-def render(tab=None):
-    if tab is not None:
-        with tab:
-            _render_inner()
-    else:
-        _render_inner()
+def render():
+    _render_inner()
 
 
 def _render_inner():
