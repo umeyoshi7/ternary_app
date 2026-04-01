@@ -89,36 +89,45 @@ class ExcelEquipmentRepository(EquipmentRepository):
 
     def __init__(self, path: Path | str | None = None):
         self._path = Path(path) if path else _DEFAULT_DB
+        self._df_reactors = None
+        self._df_filters = None
+
+    def _reactors(self):
+        if self._df_reactors is None:
+            import pandas as pd
+            self._df_reactors = pd.read_excel(self._path, sheet_name="Reactors")
+        return self._df_reactors
+
+    def _filters(self):
+        if self._df_filters is None:
+            import pandas as pd
+            try:
+                self._df_filters = pd.read_excel(self._path, sheet_name="Filters")
+            except Exception:
+                import pandas as pd
+                self._df_filters = pd.DataFrame()
+        return self._df_filters
 
     def list_all(self) -> list[EquipmentItem]:
-        import pandas as pd
         items: list[EquipmentItem] = []
-
-        df_r = pd.read_excel(self._path, sheet_name="Reactors")
-        for _, r in df_r.iterrows():
+        for _, r in self._reactors().iterrows():
             items.append(EquipmentItem(
                 tag_no=str(r["Tag No."]),
                 equip_type="反応槽",
                 display=f"{r['Tag No.']} ({int(r['容量(L)'])}L 反応槽)",
             ))
-
-        try:
-            df_f = pd.read_excel(self._path, sheet_name="Filters")
+        df_f = self._filters()
+        if not df_f.empty:
             for _, f in df_f.iterrows():
                 items.append(EquipmentItem(
                     tag_no=str(f["Tag No."]),
                     equip_type="フィルター",
                     display=f"{f['Tag No.']} ({f['面積(m2)']}m² {f['種別']})",
                 ))
-        except Exception:
-            pass
-
         return items
 
     def get_reactor_spec(self, tag_no: str) -> ReactorSpec:
-        import pandas as pd
-        df = pd.read_excel(self._path, sheet_name="Reactors")
-        row = df[df["Tag No."] == tag_no]
+        row = self._reactors()[self._reactors()["Tag No."] == tag_no]
         if row.empty:
             raise ValueError(f"反応槽 Tag No. '{tag_no}' はDBに存在しません。")
         r = row.iloc[0]
@@ -131,9 +140,8 @@ class ExcelEquipmentRepository(EquipmentRepository):
         )
 
     def get_filter_spec(self, tag_no: str) -> FilterSpec:
-        import pandas as pd
-        df = pd.read_excel(self._path, sheet_name="Filters")
-        row = df[df["Tag No."] == tag_no]
+        df_f = self._filters()
+        row = df_f[df_f["Tag No."] == tag_no] if not df_f.empty else df_f
         if row.empty:
             raise ValueError(f"フィルター Tag No. '{tag_no}' はDBに存在しません。")
         f = row.iloc[0]
@@ -165,10 +173,13 @@ class BigQueryEquipmentRepository(EquipmentRepository):
     def __init__(self):
         self._project = os.environ["BIGQUERY_PROJECT_ID"]
         self._dataset = os.environ.get("BIGQUERY_DATASET", "plant_master")
+        self._bq_client = None
 
     def _client(self):
-        from google.cloud import bigquery  # type: ignore[import]
-        return bigquery.Client(project=self._project)
+        if self._bq_client is None:
+            from google.cloud import bigquery  # type: ignore[import]
+            self._bq_client = bigquery.Client(project=self._project)
+        return self._bq_client
 
     def _query_one(self, sql: str, tag_no: str):
         from google.cloud import bigquery  # type: ignore[import]
