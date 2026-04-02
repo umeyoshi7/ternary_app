@@ -468,7 +468,18 @@ _TIMETABLE_RESET_PREFIXES = (
 )
 
 
+def _init_timetable_state() -> None:
+    defaults = {
+        "timetable_file_key": None,  # "filename+size" 文字列
+        "timetable_flow":     None,  # ManufacturingFlow オブジェクト
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
 def _render_inner():
+    _init_timetable_state()
     _col_hdr, _col_rst = st.columns([9, 1])
     with _col_hdr:
         st.header("タイムテーブル自動作成")
@@ -524,14 +535,30 @@ def _render_inner():
             key="timetable_upload",
         )
 
-    if uploaded is None:
-        st.info("製造フロー Excel をアップロードしてください。")
-        return
+    # 新規ファイル検出 → 工程編集状態リセット & flow を session_state に保存
+    if uploaded is not None:
+        file_key = uploaded.name + str(uploaded.size)
+        if file_key != st.session_state["timetable_file_key"]:
+            _STEP_EDIT_PREFIXES = (
+                "dur_", "eq_",
+                "ht_t0_", "ht_tt_", "ht_vl_", "ht_dn_", "ht_cp_", "ht_dto_",
+                "fi_dP_", "fi_mu_", "fi_al_", "fi_rm_", "fi_area_", "fi_mc_", "fi_vt_",
+            )
+            for _k in list(st.session_state.keys()):
+                if any(_k.startswith(_p) for _p in _STEP_EDIT_PREFIXES):
+                    del st.session_state[_k]
+            try:
+                flow_obj = read_flow_excel(io.BytesIO(uploaded.read()))
+            except Exception as e:
+                st.error(f"ファイルの読み込みに失敗しました: {e}")
+                return
+            st.session_state["timetable_file_key"] = file_key
+            st.session_state["timetable_flow"] = flow_obj
 
-    try:
-        flow = read_flow_excel(io.BytesIO(uploaded.read()))
-    except Exception as e:
-        st.error(f"ファイルの読み込みに失敗しました: {e}")
+    # session_state から flow を取得（ページ遷移後の復元もここで行われる）
+    flow: ManufacturingFlow | None = st.session_state.get("timetable_flow")
+    if flow is None:
+        st.info("製造フロー Excel をアップロードしてください。")
         return
 
     if not flow.steps:
