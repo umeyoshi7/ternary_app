@@ -91,6 +91,13 @@ def _init_state() -> None:
             st.session_state[k] = v
 
 
+_REACT_STATE_KEYS = [
+    "file_key", "uploaded_df", "analysis_results", "analysis_complete",
+    "load_warnings", "temp_groups", "detected_type", "detected_reason",
+    "mass_balance_ok", "mass_balance_cv", "sim_conditions", "sim_results",
+]
+
+
 def render(tab=None):
     """反応速度解析ページ"""
     _ensure_template()
@@ -99,7 +106,15 @@ def render(tab=None):
     # ---------------------------------------------------------------------------
     # Main area
     # ---------------------------------------------------------------------------
-    st.title("反応速度定数・反応次数推算")
+    _col_hdr, _col_rst = st.columns([9, 1])
+    with _col_hdr:
+        st.title("反応速度定数・反応次数推算")
+    with _col_rst:
+        st.write("")
+        if st.button("リセット", key="react_reset_btn"):
+            for _k in _REACT_STATE_KEYS:
+                st.session_state.pop(_k, None)
+            st.rerun()
 
     # result_container の位置はここ（ページ上部）に固定され、
     # 後から with result_container: で中身を流し込む

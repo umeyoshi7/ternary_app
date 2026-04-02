@@ -8,7 +8,15 @@ from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 def render_vp_tab(tab=None):
     with (tab if tab is not None else contextlib.nullcontext()):
-        st.header("蒸気圧曲線")
+        _col_hdr, _col_rst = st.columns([9, 1])
+        with _col_hdr:
+            st.header("蒸気圧曲線")
+        with _col_rst:
+            if st.button("リセット", key="vp_reset_btn"):
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith("vp_"):
+                        del st.session_state[_k]
+                st.rerun()
         col_vp1, col_vp2 = st.columns([1, 3])
         with col_vp1:
             vp_name = st.selectbox("成分", [s["name"] for s in ALL_SOLVENTS], key="vp_name")

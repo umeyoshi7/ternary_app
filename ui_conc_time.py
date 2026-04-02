@@ -163,7 +163,16 @@ def _calc_concentration_time(
 
 def render() -> None:
     _init_state()
-    st.title("濃縮時間推算")
+    _col_hdr, _col_rst = st.columns([9, 1])
+    with _col_hdr:
+        st.title("濃縮時間推算")
+    with _col_rst:
+        st.write("")
+        if st.button("リセット", key="ct_reset_btn"):
+            for _k in list(st.session_state.keys()):
+                if _k.startswith("ct_"):
+                    del st.session_state[_k]
+            st.rerun()
     st.caption("レイリー蒸留シミュレーションと伝熱計算を組み合わせて、濃縮に要する時間を推算します。")
 
     # ════════════════════════════════════════════════════════════════════════
