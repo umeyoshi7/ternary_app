@@ -72,7 +72,16 @@ def _cp_input(key_prefix: str, label: str = "比熱入力") -> float:
 
 def render() -> None:
     _init_state()
-    st.title("伝熱計算")
+    _col_hdr, _col_rst = st.columns([9, 1])
+    with _col_hdr:
+        st.title("伝熱計算")
+    with _col_rst:
+        st.write("")
+        if st.button("リセット", key="ht_reset_btn"):
+            for _k in list(st.session_state.keys()):
+                if _k.startswith("ht_"):
+                    del st.session_state[_k]
+            st.rerun()
 
     # ════════════════════════════════════════════════════════════════════════
     # Section 1: 反応器選択

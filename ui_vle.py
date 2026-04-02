@@ -8,7 +8,15 @@ from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 def render_vle_tab(tab=None):
     with (tab if tab is not None else contextlib.nullcontext()):
-        st.header("VLE線図（2成分系）")
+        _col_hdr, _col_rst = st.columns([9, 1])
+        with _col_hdr:
+            st.header("VLE線図（2成分系）")
+        with _col_rst:
+            if st.button("リセット", key="vle_reset_btn"):
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith("vle_"):
+                        del st.session_state[_k]
+                st.rerun()
         col_v1, col_v2, col_v3 = st.columns(3)
         with col_v1:
             vle_s1_name = st.selectbox("成分 1", [s["name"] for s in ALL_SOLVENTS],

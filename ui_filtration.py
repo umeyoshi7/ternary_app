@@ -54,7 +54,16 @@ def _init_state() -> None:
 
 def render() -> None:
     _init_state()
-    st.title("ろ過時間推算")
+    _col_hdr, _col_rst = st.columns([9, 1])
+    with _col_hdr:
+        st.title("ろ過時間推算")
+    with _col_rst:
+        st.write("")
+        if st.button("リセット", key="fi_reset_btn"):
+            for _k in list(st.session_state.keys()):
+                if _k.startswith("fi_"):
+                    del st.session_state[_k]
+            st.rerun()
     st.caption("Ruth のろ過方程式を用いてケーキ比抵抗・圧縮性指数の算出とろ過時間の推算を行います。")
 
     tab1, tab2, tab3 = st.tabs(["ケーキ比抵抗算出", "圧縮性指数算出", "ろ過時間推算"])

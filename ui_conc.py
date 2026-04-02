@@ -9,7 +9,15 @@ from solvents import ALL_SOLVENTS, get_solvent_by_name
 
 def render_conc_tab(tab=None):
     with (tab if tab is not None else contextlib.nullcontext()):
-        st.header("濃縮シミュレーション（レイリー蒸留）")
+        _col_hdr, _col_rst = st.columns([9, 1])
+        with _col_hdr:
+            st.header("濃縮シミュレーション（レイリー蒸留）")
+        with _col_rst:
+            if st.button("リセット", key="conc_reset_btn"):
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith("conc_"):
+                        del st.session_state[_k]
+                st.rerun()
         conc_n = st.radio("成分数", [2, 3, 4], horizontal=True, key="conc_n")
         conc_unit = st.radio("単位", ["mol", "g", "mL"], horizontal=True, key="conc_unit")
 

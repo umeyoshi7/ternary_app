@@ -461,8 +461,23 @@ def render():
     _render_inner()
 
 
+_TIMETABLE_RESET_PREFIXES = (
+    "timetable_", "dur_", "eq_",
+    "ht_t0_", "ht_tt_", "ht_vl_", "ht_dn_", "ht_cp_", "ht_dto_",
+    "fi_dP_", "fi_mu_", "fi_al_", "fi_rm_", "fi_area_", "fi_mc_", "fi_vt_",
+)
+
+
 def _render_inner():
-    st.header("タイムテーブル自動作成")
+    _col_hdr, _col_rst = st.columns([9, 1])
+    with _col_hdr:
+        st.header("タイムテーブル自動作成")
+    with _col_rst:
+        if st.button("リセット", key="tt_reset_btn"):
+            for _k in list(st.session_state.keys()):
+                if any(_k.startswith(_p) for _p in _TIMETABLE_RESET_PREFIXES):
+                    del st.session_state[_k]
+            st.rerun()
 
     with st.expander("使い方", expanded=False):
         st.markdown("""

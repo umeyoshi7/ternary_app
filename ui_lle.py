@@ -9,18 +9,30 @@ from solvents import MISCIBLE_SOLVENTS, IMMISCIBLE_SOLVENTS, get_solvent_by_name
 
 def render_lle_tab(tab=None):
     with (tab if tab is not None else contextlib.nullcontext()):
+        _col_hdr, _col_rst = st.columns([9, 1])
+        with _col_hdr:
+            st.subheader("LLE線図")
+        with _col_rst:
+            if st.button("リセット", key="lle_reset_btn"):
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith("lle_") or _k.startswith("amt_"):
+                        del st.session_state[_k]
+                for _k in ["tie_lines", "binodal_pts", "T_C", "layer_result"]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+
         col_ctrl, col_plot = st.columns([1, 2])
 
         with col_ctrl:
             st.header("計算条件")
-            T_C = st.slider("温度 (°C)", 10, 100, 25)
-            n_grid = st.slider("格子点数", 10, 50, 25)
+            T_C = st.slider("温度 (°C)", 10, 100, 25, key="lle_T_C")
+            n_grid = st.slider("格子点数", 10, 50, 25, key="lle_n_grid")
 
             st.divider()
             st.header("溶媒選択")
             st.markdown("**Component 0:** Water（固定）")
-            sel_misc = st.selectbox("Component 1 (水溶性)", [s["name"] for s in MISCIBLE_SOLVENTS], index=0)
-            sel_immis = st.selectbox("Component 2 (非水溶性)", [s["name"] for s in IMMISCIBLE_SOLVENTS], index=0)
+            sel_misc = st.selectbox("Component 1 (水溶性)", [s["name"] for s in MISCIBLE_SOLVENTS], index=0, key="lle_sel_misc")
+            sel_immis = st.selectbox("Component 2 (非水溶性)", [s["name"] for s in IMMISCIBLE_SOLVENTS], index=0, key="lle_sel_immis")
             solvent1 = get_solvent_by_name(sel_misc, MISCIBLE_SOLVENTS)
             solvent2 = get_solvent_by_name(sel_immis, IMMISCIBLE_SOLVENTS)
 
@@ -28,8 +40,8 @@ def render_lle_tab(tab=None):
 
             st.divider()
             st.header("仕込み組成 → 層分離計算")
-            unit = st.radio("単位", ['g', 'mol', 'mL'], horizontal=True)
-            amt_water = st.number_input("Water", min_value=0.0, value=1.0, step=0.1, format="%.3f")
+            unit = st.radio("単位", ['g', 'mol', 'mL'], horizontal=True, key="lle_unit")
+            amt_water = st.number_input("Water", min_value=0.0, value=1.0, step=0.1, format="%.3f", key="lle_amt_water")
             amt_misc = st.number_input(solvent1["name"], min_value=0.0, value=1.0, step=0.1,
                                        format="%.3f", key=f"amt_{solvent1['thermo_id']}")
             amt_immis = st.number_input(solvent2["name"], min_value=0.0, value=1.0, step=0.1,

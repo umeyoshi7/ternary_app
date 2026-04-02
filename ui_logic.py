@@ -6,7 +6,7 @@ def render_logic_tab(tab=None):
     with (tab if tab is not None else contextlib.nullcontext()):
         st.header("計算ロジック・数式説明")
 
-        with st.expander("1. LLE線図（液液平衡）", expanded=True):
+        with st.expander("1. LLE線図（液液平衡）", expanded=False):
             st.markdown(r"""
 #### 活量係数モデル（UNIFAC Dortmund）
 
