@@ -25,6 +25,22 @@ streamlit run app.py
 - 各工程を色分けしたガントチャート形式の **タイムテーブル Excel** をダウンロード
 - 計算モジュール未実装工程は手動入力値にフォールバック（警告表示付き）
 
+**AI パラメータ補完（Azure OpenAI）**
+
+アップロードした製造フローに対し、タイムテーブル生成に必要なパラメータ
+（機器 Tag No.・所要時間・伝熱/ろ過計算パラメータ）を LLM が推定し、
+既存の編集画面に自動入力します。
+
+- コンセプト：**LLM は提案のみ、計算は既存エンジン**。AI の提案は既存編集ウィジェットに
+  下書きとして書き込まれるだけで、ユーザーが全項目を手修正してから生成できる
+- チャット欄から追い指示も可能（例：「操作3 を 45分 に」）
+- 提案は適用前に検証（機器 Tag No. の実在チェック・操作タイプとの整合・数値下限）され、
+  不正値は警告表示のうえ無視される
+- **API キー未設定時はモック（デモ）モード**で動作。`.env.example` を `.env` にコピーして
+  Azure OpenAI の接続情報（ENDPOINT / API_KEY / DEPLOYMENT）を記入すると LLM 補完に切り替わる
+- テスト：`tests/test_timetable_agent.py`（ユニット）、
+  `tests/test_timetable_agent_ui.py`（AppTest による UI 統合テスト）
+
 ---
 
 ### 化学工学計算
@@ -210,8 +226,10 @@ chem_eng_app/
 ├── ui_heat_transfer.py     # 伝熱計算ページ
 ├── ui_filtration.py        # ろ過時間推算ページ
 ├── ui_timetable.py         # タイムテーブル作成ページ
+├── ui_timetable_agent_panel.py  # AI パラメータ補完パネル（タイムテーブルページに併設）
 ├── ui_logic.py             # ロジック説明ページ
 ├── requirements.txt        # 依存パッケージ
+├── .env.example            # Azure OpenAI 接続設定テンプレート（.env にコピーして使用）
 ├── Dockerfile
 ├── filtration/             # ろ過時間推算モジュール
 │   └── src/
@@ -240,9 +258,16 @@ chem_eng_app/
 │   ├── sample_data/        # サンプルデータ 6種
 │   └── template/
 │       └── experiment_template.xlsx
-└── timetable/              # タイムテーブル生成モジュール
-    ├── flow_reader.py      # フローシート Excel 読み込み・スケジュール計算
-    ├── timetable_writer.py # タイムテーブル Excel 出力
-    └── templates/
-        └── flow_template.xlsx
+├── timetable/              # タイムテーブル生成モジュール
+│   ├── flow_reader.py      # フローシート Excel 読み込み・スケジュール計算
+│   ├── timetable_writer.py # タイムテーブル Excel 出力
+│   └── templates/
+│       └── flow_template.xlsx
+├── timetable_agent/        # AI パラメータ補完エージェント
+│   ├── config.py           # Azure OpenAI 接続設定（.env / 環境変数）
+│   ├── schemas.py          # LLM 出力の Pydantic スキーマ（差分提案形式）
+│   ├── client.py           # LLM クライアント（Azure OpenAI / モック自動切替）
+│   ├── agent.py            # プロンプト組立・LLM 呼び出し
+│   └── applier.py          # 提案の検証と編集画面への適用
+└── tests/                  # timetable_agent のテスト（ユニット / UI 統合）
 ```

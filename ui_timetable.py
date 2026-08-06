@@ -61,6 +61,12 @@ try:
 except Exception:
     _FI_AVAILABLE = False
 
+try:
+    from ui_timetable_agent_panel import render_agent_panel as _render_agent_panel
+    _AGENT_AVAILABLE = True
+except Exception:
+    _AGENT_AVAILABLE = False
+
 TEMPLATE_PATH = Path(__file__).parent / "timetable" / "templates" / "flow_template.xlsx"
 
 # FILTER/WASH のみ Filters（フィルター）を選択可能。それ以外は Reactors のみ。
@@ -900,6 +906,10 @@ def _render_inner():
             return ["（未選択）"] + filter_display
         else:
             return ["（未選択）"] + reactor_display
+
+    # ─ AI パラメータ補完パネル（③のウィジェット描画前に呼ぶ必要がある）─
+    if _AGENT_AVAILABLE:
+        _render_agent_panel(rows, eq_items)
 
     # ─ セッション状態キーの初期化（未設定のもののみ）─
     for row in rows:
